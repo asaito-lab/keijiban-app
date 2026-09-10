@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>掲示板</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    max-width: 600px;
+    margin: 40px auto;
+    padding: 0 16px;
+    background: #f7f7f8;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.4rem; }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 24px;
+  }
+  input, textarea {
+    font: inherit;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  button {
+    font: inherit;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+    align-self: flex-start;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #posts { display: flex; flex-direction: column; gap: 12px; }
+  .post {
+    background: #fff;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .post .name { font-weight: 600; }
+  .post .body { white-space: pre-wrap; margin: 4px 0; }
+  .post .time { font-size: 0.8rem; color: #888; }
+  #error { color: #dc2626; margin-bottom: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>掲示板</h1>
+
+<form id="post-form">
+  <input id="name" type="text" placeholder="名前" required maxlength="50">
+  <textarea id="body" placeholder="本文" required maxlength="2000"></textarea>
+  <button type="submit">投稿する</button>
+</form>
+
+<div id="error"></div>
+<div id="posts">読み込み中...</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = "https://cdpalsxkfbagoclncxub.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_VsgJjZzJ0YGMX4Z_1vG4fg_PeN6ycrb";
+
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+  const form = document.getElementById("post-form");
+  const nameInput = document.getElementById("name");
+  const bodyInput = document.getElementById("body");
+  const postsEl = document.getElementById("posts");
+  const errorEl = document.getElementById("error");
+  const submitBtn = form.querySelector("button");
+
+  function showError(err) {
+    console.error(err);
+    errorEl.textContent = err?.message ?? String(err);
+  }
+
+  function clearError() {
+    errorEl.textContent = "";
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function renderPosts(posts) {
+    if (!posts || posts.length === 0) {
+      postsEl.innerHTML = "<p>まだ投稿がありません。</p>";
+      return;
+    }
+    postsEl.innerHTML = posts.map((p) => `
+      <div class="post">
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="body">${escapeHtml(p.body)}</div>
+        <div class="time">${new Date(p.created_at).toLocaleString("ja-JP")}</div>
+      </div>
+    `).join("");
+  }
+
+  async function loadPosts() {
+    const { data, error } = await sb
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      showError(error);
+      postsEl.innerHTML = "";
+      return;
+    }
+    renderPosts(data);
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearError();
+    submitBtn.disabled = true;
+
+    const name = nameInput.value.trim();
+    const body = bodyInput.value.trim();
+
+    const { error } = await sb.from("posts").insert({ name, body });
+
+    submitBtn.disabled = false;
+
+    if (error) {
+      showError(error);
+      return;
+    }
+
+    form.reset();
+    await loadPosts();
+  });
+
+  loadPosts();
+</script>
+
+</body>
+</html>
